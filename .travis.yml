@@ -1,112 +1,81 @@
-language: java
-python:
-  - "2.7"
-addons:
-  apt:
-    packages:
-      - python-pip
-      - python-virtualenv
-      - wget
-      - mercurial
-
-# Use Trusty to get enough RAM
-sudo: required
-dist: trusty
-
-jdk:
-    - openjdk11
+os: windows
+language: shell
 
 env:
-  global:
-    - JVMCI_VERSION="jvmci-20.0-b01"
-    - JDK8_UPDATE_VERSION="242"
-    - JDK8_UPDATE_VERSION_SUFFIX=""
+    global:
+        - MKS_HOME=/c/Progra~1/Git/usr/bin
+        - JAVA_HOME=$HOME/labsjdk-ce-11.0.5-jvmci-19.3-b06/
+        - EXTRA_JAVA_HOMES=$HOME/openjdk1.8.0_232-jvmci-19.3-b06/
+        - SSL_CERT_FILE=$HOME/cacert.pem
+        
+        - PATH=/c/Progra~2/Micros~1.0/VC/bin/amd64:${PATH}
+        - PATH=$JAVA_HOME/bin:${PATH}
+        - PATH=/c/python27:/c/python27/scripts:${PATH}
+        - PATH=$HOME/mx:${PATH}
+        - PATH=/c/Progra~1/Git/bin:${PATH}
+        
+        - INCLUDE=/c/Progra~2/Micros~1.0/VC/INCLUDE:/c/Progra~2/WINDOW~3/10/include/10.0.18362.0/ucrt:/c/Progra~2/WINDOW~3/10/include/10.0.18362.0/shared:/c/Progra~2/WINDOW~3/10/include/10.0.18362.0/um:/c/Progra~2/WINDOW~3/10/include/10.0.18362.0/winrt
+        - LIB=/c/Progra~2/Micros~1.0/VC/LIB/amd64:/c/Progra~2/WINDOW~3/10/lib/10.0.18362.0/ucrt/x64:/c/Progra~2/WINDOW~3/10/lib/10.0.18362.0/um/x64
+        - VCINSTALLDIR=/c/Progra~2/Micros~1.0/VC/
+        - VS140COMNTOOLS=/c/Progra~2/Micros~1.0/Common7/Tools/
 
-matrix:
-  include:
-  - env: JDK="jdk8" GATE="style,fullbuild" PRIMARY="substratevm"
-  - env: JDK="jdk8" GATE="build,test" PRIMARY="compiler"
-  - env: JDK="jdk8" GATE="build,test,helloworld" PRIMARY="substratevm"
-  - env: JDK="jdk8" GATE="build,bootstraplite" PRIMARY="compiler"
-  - env: JDK="jdk8" GATE="style,fullbuild,sulongBasic" PRIMARY="sulong"
-    addons:
-      apt:
-        packages:
-          - python-pip
-          - libc++1
-          - libc++abi1
-  - env: JDK="jdk8" GATE="build,sulong" PRIMARY="vm" DYNAMIC_IMPORTS="/sulong,/substratevm" DISABLE_POLYGLOT=true DISABLE_LIBPOLYGLOT=true
-    addons:
-      apt:
-        sources:
-          - ubuntu-toolchain-r-test
-        packages:
-          - libc++1
-          - libc++abi1
-  - env: JDK="jdk11" GATE="style,fullbuild" PRIMARY="compiler"
-  - env: JDK="jdk11" GATE="build,test" PRIMARY="compiler"
-  - env: JDK="jdk11" GATE="build,bootstraplite" PRIMARY="compiler"
-  - os: linux
-    arch: arm64
-    env: JDK="jdk11" GATE="fullbuild,test" PRIMARY="compiler"
-  - os: linux
-    arch: arm64
-    env: JDK="jdk11" GATE="build,bootstraplite" PRIMARY="compiler"
-# GR-16977
-#  - env: JDK="jdk11" GATE="build,test,helloworld" PRIMARY="substratevm"
+git:
+  autocrlf: input
 
+cache:
+  directories:
+  #- $HOME/.m2
+  #- /c/tools/Python27
+  #- /c/Python27
+  
+before_install:
+    ## Could not connect to the IGV on 127.0.0.1:4445. ##
+    - netsh advfirewall firewall add rule name="IGV (in)" dir=in action=allow localport=4445 protocol=TCP
+    - netsh advfirewall firewall add rule name="IGV (out)" dir=out action=allow localport=4445 protocol=TCP
+    - netsh advfirewall firewall add rule name="IGV (in)" dir=in action=allow localport=4445 protocol=UDP
+    - netsh advfirewall firewall add rule name="IGV (out)" dir=out action=allow localport=4445 protocol=UDP
+
+    ## Combat long path issues during `mx unittest` ##
+    #- cmd //c "reg query HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled"
+    #- cmd //c "reg add HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled /t REG_DWORD /d 1 /f"
+    #- cmd //c "reg query HKLM\SYSTEM\CurrentControlSet\Control\FileSystem /v LongPathsEnabled"
+    
+    - cd $HOME
+    - wget --quiet https://curl.haxx.se/ca/cacert.pem
+    
+    - wget --quiet https://github.com/graalvm/openjdk8-jvmci-builder/releases/download/jvmci-19.3-b06/openjdk-8u232-jvmci-19.3-b06-windows-amd64.tar.gz
+    - tar xf openjdk-8u232-jvmci-19.3-b06-windows-amd64.tar.gz
+
+    - wget --quiet https://github.com/graalvm/labs-openjdk-11/releases/download/jvmci-19.3-b06/labsjdk-ce-11.0.5+10-jvmci-19.3-b06-windows-amd64.tar.gz
+    - tar xf labsjdk-ce-11.0.5+10-jvmci-19.3-b06-windows-amd64.tar.gz
+        
+    #- choco upgrade python2 -y --no-progress
+    #- which -a python
+    #- winpty -Xallow-non-tty -Xplain python --version
+    
 install:
-  - |
-      export MX_PATH=${TRAVIS_BUILD_DIR}/../mx
-      git clone https://github.com/graalvm/mx.git ${MX_PATH}
-      export PATH=${PATH}:${MX_PATH}
-  - |
-      if [[ ${GATE} == *style* ]]
-      then
-        virtualenv venv
-        source venv/bin/activate
-        pip install astroid==1.1.0
-        pip install pylint==1.1.0
+    #- env
+    - cd $HOME
+    
+    - git clone --depth=50 --branch=master https://github.com/graalvm/mx.git
+    #- pushd mx
+    #- git checkout tags/5.248.5
+    #- popd
 
-        export ECLIPSE_TAR=${TRAVIS_BUILD_DIR}/../eclipse.tar.gz
-        wget https://archive.eclipse.org/eclipse/downloads/drops4/R-4.5.2-201602121500/eclipse-SDK-4.5.2-linux-gtk-x86_64.tar.gz -O ${ECLIPSE_TAR}
-        tar -C ${TRAVIS_BUILD_DIR}/.. -xzf ${ECLIPSE_TAR}
-        export ECLIPSE_EXE=${TRAVIS_BUILD_DIR}/../eclipse/eclipse
+    - cd $TRAVIS_BUILD_DIR
 
-        # the style gate needs the full commit history for checking copyright years
-        git fetch --unshallow
-      fi
-  - |
-      if [[ ${GATE} == *fullbuild* ]]
-      then
-        # Only test JDT on JDK8
-        if [ "${JDK}" == "jdk8" ]
-        then
-          export JDT=${MX_PATH}/ecj.jar
-          wget https://archive.eclipse.org/eclipse/downloads/drops4/R-4.5.2-201602121500/ecj-4.5.2.jar -O ${JDT}
-        fi
-      fi
-  - |
-      if [ "${JDK}" == "jdk8" ]
-      then
-        JDK_TAR=${TRAVIS_BUILD_DIR}/../jdk.tar.gz
-        wget https://github.com/graalvm/openjdk8-jvmci-builder/releases/download/${JVMCI_VERSION}/openjdk-8u${JDK8_UPDATE_VERSION}${JDK8_UPDATE_VERSION_SUFFIX}-${JVMCI_VERSION}-linux-amd64.tar.gz -O ${JDK_TAR}
-        tar -C ${TRAVIS_BUILD_DIR}/.. -xzf ${JDK_TAR}
-        export JAVA_HOME=${TRAVIS_BUILD_DIR}/../openjdk1.8.0_${JDK8_UPDATE_VERSION}-${JVMCI_VERSION}
-      fi
-  - |
-      if [ "${JDK}" == "jdk11" ]
-      then
-        # Set the JAVA_HOME to openjdk11 if it is not set
-        if [ "${JAVA_HOME}" == "" ]
-        then
-          export JAVA_HOME=$(realpath $(dirname $(which java | xargs realpath))/../)
-        fi
-      fi
+    ## Deal with file & folder names being too long for unit testing ##
+    - cd ..
+    - mv graal /c/
 
+    - cd /c/graal/compiler
+    
+    - mx clean
+    #- mx -V build
+    - mx build
+    
+    #- mx -V unittest
+    - mx gate
+    
 script:
-  - echo ${JAVA_HOME}
-  - ${JAVA_HOME}/bin/java -version
-  - mx --primary-suite-path ${TRAVIS_BUILD_DIR}/${PRIMARY} --J @"-Xmx2g" --java-home=${JAVA_HOME} gate --strict-mode --tags ${GATE}
-after_failure:
-  - cat hs_err*
+	- echo Deploy stuff could go here...
